@@ -1102,6 +1102,9 @@ async function delSale(id){await SB.from('sales').delete().eq('id',id);await loa
 function editSale(id){
   const s=cache.sales.find(x=>x.id===id);if(!s)return;
   document.getElementById('es-id').value=id;
+  // จำหน้าที่เรียก
+  const fromBills=!document.getElementById('page-bills').classList.contains('hidden');
+  document.getElementById('es-id').dataset.from=fromBills?'bills':'sales';
   document.getElementById('es-info').textContent='#'+String(id).padStart(4,'0')+' — '+fmtDate(s.created_at);
   document.getElementById('es-product').value=s.product_name;
   document.getElementById('es-price').value=s.price;
@@ -1137,7 +1140,9 @@ async function saveEditSale(){
     customer_phone:document.getElementById('es-cphone').value.trim()||null,
     note:document.getElementById('es-note').value.trim()||null,
   }).eq('id',id);
-  await loadAll();closeModal('modal-edit-sale');renderSales();
+  await loadAll();closeModal('modal-edit-sale');
+  const from=document.getElementById('es-id').dataset.from;
+  if(from==='bills')renderBills();else renderSales();
 }
 
 // ===== CUSTOMERS =====
@@ -1328,8 +1333,8 @@ function renderBills(){
     <td style="font-weight:600;color:var(--green)">${fmt(s.total)}</td>
     <td><span class="badge b-coral">${s.channel}</span></td>
     <td style="display:flex;gap:4px">
-      <button class="btn btn-sm" onclick="showReceipt(${s.id})"><i class="ti ti-printer"></i></button>
-      <button class="btn btn-sm" onclick="editBill(${s.id})"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm" onclick="showReceipt(${s.id})" title="ปริ้นใบเสร็จ"><i class="ti ti-printer"></i></button>
+      <button class="btn btn-sm" onclick="editSale(${s.id})" title="แก้ไขทุกอย่าง"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-danger" onclick="confirmDel(()=>delSale(${s.id}),'ลบบิลนี้')"><i class="ti ti-trash"></i></button>
     </td></tr>`).join(''):emptyRow(8);
 }
