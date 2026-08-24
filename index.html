@@ -309,6 +309,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
             <div class="form-group"><label>เบอร์โทร</label><input type="text" id="s-cphone" placeholder="เช่น 089-xxx-xxxx"></div>
           </div>
           <div class="form-group"><label>หมายเหตุ</label><input type="text" id="s-note" placeholder="(ถ้ามี)"></div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);margin-bottom:12px;cursor:pointer"><input type="checkbox" id="s-unpaid" style="width:auto"> ค้างจ่าย (ยังไม่ได้ชำระเงิน)</label>
           <button class="btn btn-primary" onclick="addSale()"><i class="ti ti-check"></i> บันทึก</button>
           <button class="btn" style="margin-left:8px" onclick="addSaleAndPrint()"><i class="ti ti-printer"></i> บันทึก + ปริ้นใบเสร็จ</button>
         </div>
@@ -351,8 +352,8 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
               <option value="">ทุกช่องทาง</option><option>หน้าร้าน</option><option>ออนไลน์</option><option>ตลาด</option><option>อื่นๆ</option>
             </select>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>วันที่/เวลา</th><th>ลูกค้า</th><th>เบอร์</th><th>สินค้า</th><th>ยอด</th><th>ช่องทาง</th><th></th></tr></thead>
-          <tbody id="bills-list"><tr class="empty-row"><td colspan="8">ยังไม่มีรายการ</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>วันที่/เวลา</th><th>ลูกค้า</th><th>เบอร์</th><th>สินค้า</th><th>ยอด</th><th>ช่องทาง</th><th>สถานะ</th><th></th></tr></thead>
+          <tbody id="bills-list"><tr class="empty-row"><td colspan="9">ยังไม่มีรายการ</td></tr></tbody></table></div>
         </div>
       </div>
     </div>
@@ -638,6 +639,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
       <div class="form-group"><label>เบอร์โทรลูกค้า</label><input type="text" id="es-cphone" placeholder="-"></div>
       <div class="form-group"><label>หมายเหตุ</label><input type="text" id="es-note" placeholder="-"></div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);margin-bottom:12px;cursor:pointer"><input type="checkbox" id="es-unpaid" style="width:auto"> ค้างจ่าย (ยังไม่ได้ชำระเงิน)</label>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-edit-sale')">ยกเลิก</button>
       <button class="btn btn-primary" onclick="saveEditSale()"><i class="ti ti-check"></i> บันทึก</button>
@@ -728,6 +730,10 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
       <div id="r-items"></div>
       <hr class="r-divider">
       <div class="r-total-row"><span>รวมทั้งสิ้น</span><span id="r-total"></span></div>
+      <div class="r-row" style="margin-top:6px"><span class="r-row-label">ยอดค้าง:</span><input type="number" id="r-owed" value="0" oninput="updateReceiptNet()" style="width:100px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit"></div>
+      <div class="r-row"><span class="r-row-label">ค่าขนส่ง:</span><input type="number" id="r-ship" value="0" oninput="updateReceiptNet()" style="width:100px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit"></div>
+      <hr class="r-divider">
+      <div class="r-total-row" style="font-weight:700"><span>ยอดสุทธิ</span><span id="r-net" style="text-decoration:underline"></span></div>
       <hr class="r-divider">
       <div id="r-note" style="font-size:12px;color:#666"></div>
       <div class="r-footer"><div>🍖 ขอบคุณที่ใช้บริการ 🍖</div><div id="r-footer-name"></div></div>
@@ -1160,11 +1166,13 @@ async function addSale(){
     customer_phone:document.getElementById('s-cphone').value.trim()||null,
     customer_id:cid?parseInt(cid):null,
     price_type:priceType,
+    paid:!document.getElementById('s-unpaid').checked,
   }).select().single();
   if(error){setSync('err','บันทึกไม่สำเร็จ');return alert(error.message);}
   await SB.from('products').update({stock_qty:Math.max(0,(p.stock_qty||0)-qty)}).eq('id',p.id);
   await loadAll();
   ['s-customer','s-product','s-qty','s-price','s-price-per','s-unit','s-total','s-note','s-cname','s-cphone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('s-unpaid').checked=false;
   document.getElementById('s-price-tier').textContent='';
   renderSales();return data;
 }
@@ -1188,6 +1196,7 @@ function editSale(id){
   document.getElementById('es-cname').value=s.customer_name||'';
   document.getElementById('es-cphone').value=s.customer_phone||'';
   document.getElementById('es-note').value=s.note||'';
+  document.getElementById('es-unpaid').checked=s.paid===false;
   refreshUnitDataLists();
   openModal('modal-edit-sale');
 }
@@ -1211,6 +1220,7 @@ async function saveEditSale(){
     customer_name:document.getElementById('es-cname').value.trim()||null,
     customer_phone:document.getElementById('es-cphone').value.trim()||null,
     note:document.getElementById('es-note').value.trim()||null,
+    paid:!document.getElementById('es-unpaid').checked,
   }).eq('id',id);
   await loadAll();closeModal('modal-edit-sale');
   const from=document.getElementById('es-id').dataset.from;
@@ -1389,11 +1399,16 @@ function renderBills(){
     <td>${s.product_name}</td>
     <td style="font-weight:600;color:var(--green)">${fmt(s.total)}</td>
     <td><span class="badge b-coral">${s.channel}</span></td>
+    <td><span class="badge" style="cursor:pointer;background:${s.paid===false?'var(--red-l)':'var(--green-l)'};color:${s.paid===false?'#A32D2D':'#0F6E56'}" onclick="togglePaid(${s.id},${s.paid===false})" title="แตะเพื่อสลับสถานะ">${s.paid===false?'ค้างจ่าย':'จ่ายแล้ว'}</span></td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-sm" onclick="showReceipt(${s.id})" title="ปริ้นใบเสร็จ"><i class="ti ti-printer"></i></button>
       <button class="btn btn-sm" onclick="editSale(${s.id})" title="แก้ไขทุกอย่าง"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-danger" onclick="confirmDel(()=>delSale(${s.id}),'ลบบิลนี้')"><i class="ti ti-trash"></i></button>
-    </td></tr>`).join(''):emptyRow(8);
+    </td></tr>`).join(''):emptyRow(9);
+}
+async function togglePaid(id,isCurrentlyUnpaid){
+  await SB.from('sales').update({paid:!!isCurrentlyUnpaid}).eq('id',id);
+  await loadAll();renderBills();
 }
 function editBill(id){
   const s=cache.sales.find(x=>x.id===id);if(!s)return;
@@ -1736,11 +1751,27 @@ function showReceipt(saleId){
   document.getElementById('r-items').innerHTML=`<div class="r-row"><span>${s.product_name}</span></div><div class="r-row" style="padding-left:12px;color:#555"><span>${priceLabel} × ${s.qty}</span><span>${fmt(s.total)}</span></div>`;
   document.getElementById('r-total').textContent=fmt(s.total);
   document.getElementById('r-note').textContent=s.note?'หมายเหตุ: '+s.note:'';
+  document.getElementById('receipt-paper').dataset.currentTotal=s.total;
+  const owed=s.customer_id?cache.sales.filter(s2=>s2.customer_id===s.customer_id&&s2.id!==s.id&&s2.paid===false).reduce((a,s2)=>a+(s2.total||0),0):0;
+  document.getElementById('r-owed').value=owed;
+  document.getElementById('r-ship').value=0;
+  updateReceiptNet();
   openModal('modal-receipt');
 }
+function updateReceiptNet(){
+  const total=parseFloat(document.getElementById('receipt-paper').dataset.currentTotal)||0;
+  const owed=parseFloat(document.getElementById('r-owed').value)||0;
+  const ship=parseFloat(document.getElementById('r-ship').value)||0;
+  document.getElementById('r-net').textContent=fmt(total+owed+ship);
+}
 function printReceipt(){
+  const owed=parseFloat(document.getElementById('r-owed').value)||0;
+  const ship=parseFloat(document.getElementById('r-ship').value)||0;
   const pa=document.getElementById('print-area');
-  pa.innerHTML=`<div id="receipt-paper" style="width:80mm;margin:0 auto;font-family:'Courier New',monospace;font-size:12px;padding:8mm">${document.getElementById('receipt-paper').innerHTML}</div>`;
+  let html=document.getElementById('receipt-paper').innerHTML;
+  html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${fmt(owed)}</span>`);
+  html=html.replace(/<input[^>]*id="r-ship"[^>]*>/,`<span>${fmt(ship)}</span>`);
+  pa.innerHTML=`<div id="receipt-paper" style="width:80mm;margin:0 auto;font-family:'Courier New',monospace;font-size:12px;padding:8mm">${html}</div>`;
   pa.style.display='block';window.print();setTimeout(()=>{pa.style.display='none';},500);
 }
 
