@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ร้านหมูหวาน</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -740,13 +741,106 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 <div id="print-area" style="display:none"></div>
 
 <script>
-const SUPABASE_URL='https://ymskrxvunfvupjldjeem.supabase.co';
-const SUPABASE_KEY='sb_publishable_VqJlz6aKEgsilinUJOyYfg__U4Ohi6g';
+// ===== FIREBASE CONFIG =====
+// เอาค่านี้มาจาก Firebase Console > Project settings > General > Your apps > SDK setup and configuration
+const firebaseConfig={
+  apiKey: "AIzaSyADXexe1n-J0Ez00Q6C0ua-bjrABJtG1YU",
+  authDomain: "buchica-17c94.firebaseapp.com",
+  projectId: "buchica-17c94",
+  storageBucket: "buchica-17c94.firebasestorage.app",
+  messagingSenderId: "467474035691",
+  appId: "1:467474035691:web:c09d367323a67777cd9fae"
+};
 const PIN='2569';
 const SESSION_KEY='moowaan_session';
 const AVATAR_COLORS=['#FAECE7','#EAF3DE','#E6F1FB','#FAEEDA','#FCEBEB','#f0e6fb','#e6f4fb'];
 const AVATAR_TEXT=['#993C1D','#0F6E56','#185FA5','#BA7517','#A32D2D','#6B3FA0','#0F6E7A'];
 
+// ===== FIRESTORE-BACKED "SB" SHIM (Supabase-like query builder API) =====
+let _idSeq=0;
+function genId(){return Date.now()*1000+(_idSeq++%1000);}
+let db=null;
+class FBQuery{
+  constructor(collectionName){
+    this.col=db.collection(collectionName);
+    this._order=null;this._limit=null;this._eqs=[];this._neqs=[];
+    this._mode=null;this._payload=null;this._single=false;this._onConflict=[];
+  }
+  select(){this._mode=this._mode||'select';return this;}
+  order(field,opts={}){this._order={field,asc:opts.ascending!==false};return this;}
+  limit(n){this._limit=n;return this;}
+  eq(field,val){this._eqs.push([field,val]);return this;}
+  neq(field,val){this._neqs.push([field,val]);return this;}
+  insert(obj){this._mode='insert';this._payload=obj;return this;}
+  update(obj){this._mode='update';this._payload=obj;return this;}
+  delete(){this._mode='delete';return this;}
+  upsert(obj,opts={}){this._mode='upsert';this._payload=obj;this._onConflict=(opts.onConflict||'').split(',').map(s=>s.trim()).filter(Boolean);return this;}
+  single(){this._single=true;return this;}
+  then(resolve,reject){this._exec().then(resolve,reject);}
+  async _fetchAll(){const snap=await this.col.get();return snap.docs.map(d=>d.data());}
+  _matchEqs(row){
+    return this._eqs.every(([f,v])=>String(row[f])===String(v))&&this._neqs.every(([f,v])=>String(row[f])!==String(v));
+  }
+  async _exec(){
+    try{
+      if(this._mode==='select'){
+        let rows=await this._fetchAll();
+        if(this._order){
+          const {field,asc}=this._order;
+          rows.sort((a,b)=>{
+            let av=a[field],bv=b[field];
+            if(av==null)av=asc?-Infinity:Infinity;
+            if(bv==null)bv=asc?-Infinity:Infinity;
+            if(av<bv)return asc?-1:1;
+            if(av>bv)return asc?1:-1;
+            return 0;
+          });
+        }
+        if(this._limit)rows=rows.slice(0,this._limit);
+        return {data:rows,error:null};
+      }
+      if(this._mode==='insert'){
+        const items=Array.isArray(this._payload)?this._payload:[this._payload];
+        const saved=[];
+        for(const item of items){
+          const id=item.id||genId();
+          const row={...item,id,created_at:item.created_at||new Date().toISOString()};
+          await this.col.doc(String(id)).set(row);
+          saved.push(row);
+        }
+        return {data:this._single?saved[0]:saved,error:null};
+      }
+      if(this._mode==='update'){
+        const rows=await this._fetchAll();
+        const targets=rows.filter(r=>this._matchEqs(r));
+        for(const row of targets){await this.col.doc(String(row.id)).update(this._payload);}
+        return {data:null,error:null};
+      }
+      if(this._mode==='delete'){
+        const rows=await this._fetchAll();
+        const targets=rows.filter(r=>this._matchEqs(r));
+        for(const row of targets){await this.col.doc(String(row.id)).delete();}
+        return {data:null,error:null};
+      }
+      if(this._mode==='upsert'){
+        const items=Array.isArray(this._payload)?this._payload:[this._payload];
+        const rows=await this._fetchAll();
+        for(const item of items){
+          let existing=null;
+          if(this._onConflict.length){
+            existing=rows.find(r=>this._onConflict.every(f=>String(r[f])===String(item[f])));
+          }
+          if(existing){await this.col.doc(String(existing.id)).update(item);}
+          else{const id=item.id||genId();await this.col.doc(String(id)).set({...item,id});}
+        }
+        return {data:null,error:null};
+      }
+      return {data:null,error:null};
+    }catch(err){
+      return {data:null,error:{message:err.message}};
+    }
+  }
+}
 let SB=null;
 let cfg={shopName:'ร้านหมูหวาน',owner:'',phone:''};
 let cache={products:[],sales:[],expenses:[],stockHistory:[],employees:[],attendance:[],customers:[],customerPrices:[]};
@@ -905,7 +999,9 @@ async function setupTables(){
 async function bootApp(){
   document.getElementById('loading-screen').classList.remove('hidden');
   document.getElementById('main-app').classList.add('hidden');
-  SB=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
+  db=firebase.firestore();
+  SB={from(name){return new FBQuery(name);}};
   await setupTables();
   await loadAll();
   refreshUnitDataLists();
