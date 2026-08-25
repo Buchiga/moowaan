@@ -1782,15 +1782,11 @@ async function saveReceiptImage(){
   let canvas;
   try{canvas=await html2canvas(node,{backgroundColor:'#ffffff',scale:2});}
   finally{owedSpan.replaceWith(owedInput);shipSpan.replaceWith(shipInput);}
-  canvas.toBlob(async(blob)=>{
+  canvas.toBlob((blob)=>{
     if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
-    const file=new File([blob],'receipt-'+Date.now()+'.png',{type:'image/png'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'ใบเสร็จ'});return;}catch(e){/* ผู้ใช้กดยกเลิก หรือ share ไม่สำเร็จ ให้ fallback ไปดาวน์โหลดแทน */}
-    }
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;a.download=file.name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    a.href=url;a.download='receipt-'+Date.now()+'.png';document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),4000);
   },'image/png');
 }
