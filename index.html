@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ร้านหมูหวาน</title>
+<title>อิสราภรณ์หมูหวาน</title>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -125,9 +126,9 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 .receipt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:300;padding:1rem}
 .receipt-box{background:#fff;border-radius:14px;overflow:hidden;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .receipt-actions{display:flex;gap:8px;padding:1rem;background:var(--bg3);border-top:1px solid var(--border)}
-#receipt-paper{padding:1.5rem;font-family:'Courier New',monospace;font-size:13px;line-height:1.6;background:#fff}
+#receipt-paper{padding:1.5rem;font-family:'Courier New',monospace;font-size:17px;line-height:1.8;background:#fff}
 .r-shop{text-align:center;margin-bottom:12px}
-.r-shop-name{font-size:18px;font-weight:700;margin-bottom:2px}
+.r-shop-name{font-size:24px;font-weight:700;margin-bottom:2px}
 .r-divider{border:none;border-top:1px dashed #ccc;margin:10px 0}
 .r-row{display:flex;justify-content:space-between}
 .r-row-label{color:#555}
@@ -185,7 +186,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 <div class="login-wrap hidden" id="login-screen">
   <div class="login-card">
     <div style="font-size:52px;margin-bottom:1rem">🍖</div>
-    <div style="font-size:22px;font-weight:600;margin-bottom:4px">ร้านหมูหวาน</div>
+    <div style="font-size:22px;font-weight:600;margin-bottom:4px">อิสราภรณ์หมูหวาน</div>
     <div style="font-size:14px;color:var(--text2);margin-bottom:2rem">ใส่รหัสผ่าน 4 หลักเพื่อเข้าใช้งาน</div>
     <div class="pin-row">
       <div class="pin-dot" id="dot-0"></div><div class="pin-dot" id="dot-1"></div>
@@ -206,7 +207,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
   <div class="sidebar">
     <div class="brand">
       <div class="brand-icon">🍖</div>
-      <h1 id="shop-name-display">ร้านหมูหวาน</h1>
+      <h1 id="shop-name-display">อิสราภรณ์หมูหวาน</h1>
       <p style="font-size:12px;color:var(--text2);margin-top:2px">ระบบหลังบ้าน</p>
     </div>
     <div class="nav-sec">ภาพรวม</div>
@@ -716,13 +717,11 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
   <div class="receipt-box">
     <div id="receipt-paper">
       <div class="r-shop">
-        <div class="r-shop-name" id="r-shopname">ร้านหมูหวาน</div>
+        <div class="r-shop-name" id="r-shopname">อิสราภรณ์หมูหวาน</div>
         <div style="font-size:12px;color:#666" id="r-phone"></div>
       </div>
       <hr class="r-divider">
       <div class="r-row"><span class="r-row-label">วันที่:</span><span id="r-date"></span></div>
-      <div class="r-row"><span class="r-row-label">เลขที่:</span><span id="r-id"></span></div>
-      <div class="r-row"><span class="r-row-label">ช่องทาง:</span><span id="r-channel"></span></div>
       <div class="r-row" id="r-cname-row" style="display:none"><span class="r-row-label">ลูกค้า:</span><span id="r-cname"></span></div>
       <div class="r-row" id="r-cphone-row" style="display:none"><span class="r-row-label">เบอร์:</span><span id="r-cphone"></span></div>
       <hr class="r-divider">
@@ -740,6 +739,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
     </div>
     <div class="receipt-actions">
       <button class="btn" style="flex:1;justify-content:center" onclick="closeModal('modal-receipt')"><i class="ti ti-x"></i> ปิด</button>
+      <button class="btn" style="flex:1;justify-content:center" onclick="saveReceiptImage()"><i class="ti ti-photo"></i> บันทึกรูปภาพ</button>
       <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="printReceipt()"><i class="ti ti-printer"></i> พิมพ์ใบเสร็จ</button>
     </div>
   </div>
@@ -848,7 +848,7 @@ class FBQuery{
   }
 }
 let SB=null;
-let cfg={shopName:'ร้านหมูหวาน',owner:'',phone:''};
+let cfg={shopName:'อิสราภรณ์หมูหวาน',owner:'',phone:''};
 let cache={products:[],sales:[],expenses:[],stockHistory:[],employees:[],attendance:[],customers:[],customerPrices:[]};
 let pinValue='';
 
@@ -1738,12 +1738,10 @@ function fmtPriceUnit(price, per, unit){
 }
 function showReceipt(saleId){
   const s=cache.sales.find(x=>x.id===saleId);if(!s)return;
-  document.getElementById('r-shopname').textContent=cfg.shopName||'ร้านหมูหวาน';
-  document.getElementById('r-footer-name').textContent=cfg.shopName||'ร้านหมูหวาน';
+  document.getElementById('r-shopname').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
+  document.getElementById('r-footer-name').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
   document.getElementById('r-phone').textContent=cfg.phone?'โทร: '+cfg.phone:'';
   document.getElementById('r-date').textContent=fmtDate(s.created_at);
-  document.getElementById('r-id').textContent='#'+String(s.id).padStart(4,'0');
-  document.getElementById('r-channel').textContent=s.channel;
   const cr=document.getElementById('r-cname-row'),cpr=document.getElementById('r-cphone-row');
   if(s.customer_name){document.getElementById('r-cname').textContent=s.customer_name;cr.style.display='flex';}else cr.style.display='none';
   if(s.customer_phone){document.getElementById('r-cphone').textContent=s.customer_phone;cpr.style.display='flex';}else cpr.style.display='none';
@@ -1774,6 +1772,28 @@ function printReceipt(){
   pa.innerHTML=`<div id="receipt-paper" style="width:80mm;margin:0 auto;font-family:'Courier New',monospace;font-size:12px;padding:8mm">${html}</div>`;
   pa.style.display='block';window.print();setTimeout(()=>{pa.style.display='none';},500);
 }
+async function saveReceiptImage(){
+  if(typeof html2canvas==='undefined'){alert('โหลดระบบสร้างรูปภาพไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');return;}
+  const owedInput=document.getElementById('r-owed'),shipInput=document.getElementById('r-ship');
+  const owedSpan=document.createElement('span');owedSpan.textContent=fmt(parseFloat(owedInput.value)||0);
+  const shipSpan=document.createElement('span');shipSpan.textContent=fmt(parseFloat(shipInput.value)||0);
+  owedInput.replaceWith(owedSpan);shipInput.replaceWith(shipSpan);
+  const node=document.getElementById('receipt-paper');
+  let canvas;
+  try{canvas=await html2canvas(node,{backgroundColor:'#ffffff',scale:2});}
+  finally{owedSpan.replaceWith(owedInput);shipSpan.replaceWith(shipInput);}
+  canvas.toBlob(async(blob)=>{
+    if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
+    const file=new File([blob],'receipt-'+Date.now()+'.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'ใบเสร็จ'});return;}catch(e){/* ผู้ใช้กดยกเลิก หรือ share ไม่สำเร็จ ให้ fallback ไปดาวน์โหลดแทน */}
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=file.name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  },'image/png');
+}
 
 // ===== SETTINGS =====
 function addUnitFromSettings(){
@@ -1791,7 +1811,7 @@ function renderSettings(){
   renderUnitManager();
 }
 function saveConfig(){
-  cfg.shopName=document.getElementById('cfg-shopname').value||'ร้านหมูหวาน';
+  cfg.shopName=document.getElementById('cfg-shopname').value||'อิสราภรณ์หมูหวาน';
   cfg.owner=document.getElementById('cfg-owner').value;
   cfg.phone=document.getElementById('cfg-phone').value;
   document.getElementById('shop-name-display').textContent=cfg.shopName;
