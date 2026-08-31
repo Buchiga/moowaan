@@ -311,11 +311,18 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
           </div>
           <div class="form-group"><label>หมายเหตุ</label><input type="text" id="s-note" placeholder="(ถ้ามี)"></div>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);margin-bottom:12px;cursor:pointer"><input type="checkbox" id="s-unpaid" style="width:auto"> ค้างจ่าย (ยังไม่ได้ชำระเงิน)</label>
-          <button class="btn btn-primary" onclick="addSale()"><i class="ti ti-check"></i> บันทึก</button>
-          <button class="btn" style="margin-left:8px" onclick="addSaleAndPrint()"><i class="ti ti-printer"></i> บันทึก + ปริ้นใบเสร็จ</button>
+          <button class="btn btn-primary" onclick="addToCart()"><i class="ti ti-plus"></i> เพิ่มรายการนี้ลงบิล</button>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">รายการขาย</span></div>
+          <div class="card-header"><span class="card-title">🧾 รายการในบิลนี้</span><span style="font-size:15px;font-weight:700;color:var(--green)">รวม <span id="cart-total">฿0</span></span></div>
+          <div id="cart-wrap"></div>
+          <div style="display:flex;gap:8px;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem">
+            <button class="btn btn-primary" onclick="saveBill()"><i class="ti ti-check"></i> บันทึกบิล</button>
+            <button class="btn" onclick="saveBillAndPrint()"><i class="ti ti-printer"></i> บันทึกบิล + ปริ้นใบเสร็จ</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">รายการขาย (ประวัติ)</span></div>
           <div class="table-wrap"><table><thead><tr><th>วันที่/เวลา</th><th>สินค้า</th><th>จำนวน</th><th>ราคา</th><th>ยอด</th><th>ช่องทาง</th><th></th></tr></thead>
           <tbody id="sales-list"><tr class="empty-row"><td colspan="7">ยังไม่มีรายการ</td></tr></tbody></table></div>
         </div>
@@ -650,10 +657,22 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 
 <!-- EDIT BILL MODAL -->
 <div id="modal-editbill" class="overlay hidden">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:560px">
     <div class="modal-title">แก้ไขบิล</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:1rem;padding:8px 12px;background:var(--bg3);border-radius:8px" id="eb-bill-no"></div>
     <input type="hidden" id="eb-id">
+    <div class="form-group"><label>รายการสินค้าในบิลนี้</label>
+      <div id="eb-items" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"></div>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500">➕ เพิ่มสินค้าลงบิลนี้</div>
+      <div class="form-row-3" style="margin-bottom:6px">
+        <select id="eb-add-product" onchange="onEbAddProductChange()"></select>
+        <input type="number" id="eb-add-qty" placeholder="จำนวน" min="1">
+        <input type="number" id="eb-add-price" placeholder="ราคา" min="0">
+      </div>
+      <button class="btn btn-sm" onclick="addItemToBill()"><i class="ti ti-plus"></i> เพิ่มรายการ</button>
+    </div>
     <div class="form-row">
       <div class="form-group"><label>ชื่อลูกค้า</label><input type="text" id="eb-cname" placeholder="เช่น คุณสมชาย"></div>
       <div class="form-group"><label>เบอร์โทร</label><input type="text" id="eb-cphone" placeholder="เช่น 089-xxx-xxxx"></div>
@@ -661,7 +680,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
     <div class="form-group"><label>ช่องทาง</label><select id="eb-channel"><option>หน้าร้าน</option><option>ออนไลน์</option><option>ตลาด</option><option>อื่นๆ</option></select></div>
     <div class="form-group"><label>หมายเหตุ</label><input type="text" id="eb-note" placeholder="-"></div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-editbill')">ยกเลิก</button>
+      <button class="btn" onclick="closeModal('modal-editbill')">ปิด</button>
       <button class="btn btn-primary" onclick="saveEditBill()"><i class="ti ti-check"></i> บันทึก</button>
     </div>
   </div>
@@ -851,6 +870,7 @@ let SB=null;
 let cfg={shopName:'อิสราภรณ์หมูหวาน',owner:'',phone:''};
 let cache={products:[],sales:[],expenses:[],stockHistory:[],employees:[],attendance:[],customers:[],customerPrices:[]};
 let pinValue='';
+let cart=[]; // รายการสินค้าที่กำลังจะรวมเป็นบิลเดียวกัน
 
 // ===== SMART UNIT SYSTEM =====
 const DEFAULT_UNITS=['กรัม','กิโลกรัม','ชิ้น','แพ็ค','ลัง','ถุง','กล่อง','โล','ขีด'];
@@ -1084,6 +1104,7 @@ function renderSales(){
   const lastUnit=getLastUnit();
   const unitEl=document.getElementById('s-unit');
   if(unitEl&&!unitEl.value)unitEl.value=lastUnit;
+  renderCart();
   document.getElementById('sales-list').innerHTML=cache.sales.length?cache.sales.map(s=>{
     const priceLabel=fmtPriceUnit(s.price,s.price_per||1,s.unit);
     return `<tr>
@@ -1145,7 +1166,8 @@ function calcTotal(){
     fml.textContent=`${price} บาท × ${qty}${unit?' '+unit:''} = ${total} บาท`;
   } else if(fml){ fml.textContent=''; }
 }
-async function addSale(){
+// ===== CART (หลายรายการต่อบิล) =====
+function addToCart(){
   const p=cache.products.find(x=>x.id==document.getElementById('s-product').value);
   if(!p)return alert('กรุณาเลือกสินค้า');
   const qty=parseFloat(document.getElementById('s-qty').value);
@@ -1154,29 +1176,71 @@ async function addSale(){
   const pricePer=parseFloat(document.getElementById('s-price-per').value)||(p.price_per||1);
   const unit=document.getElementById('s-unit').value||p.unit;
   const total=Math.round(price*qty);
-  const cid=document.getElementById('s-customer').value;
-  const c=cache.customers.find(x=>x.id==cid);
-  const priceType=c?.type||'ปกติ';
-  setSync('saving','กำลังบันทึก...');
-  const {data,error}=await SB.from('sales').insert({
-    product_id:p.id,product_name:p.name,qty,unit,price,price_per:pricePer,total,
-    channel:document.getElementById('s-channel').value,
-    note:document.getElementById('s-note').value,
-    customer_name:document.getElementById('s-cname').value.trim()||null,
-    customer_phone:document.getElementById('s-cphone').value.trim()||null,
-    customer_id:cid?parseInt(cid):null,
-    price_type:priceType,
-    paid:!document.getElementById('s-unpaid').checked,
-  }).select().single();
-  if(error){setSync('err','บันทึกไม่สำเร็จ');return alert(error.message);}
-  await SB.from('products').update({stock_qty:Math.max(0,(p.stock_qty||0)-qty)}).eq('id',p.id);
-  await loadAll();
+  cart.push({product_id:p.id,product_name:p.name,qty,unit,price,price_per:pricePer,total});
+  // เคลียร์แค่ช่องสินค้า/ราคา/จำนวน — คงข้อมูลลูกค้า/ช่องทาง/หมายเหตุไว้ให้ครบทั้งบิล
+  document.getElementById('s-product').value='';
+  document.getElementById('s-qty').value='';
+  document.getElementById('s-price').value='';
+  document.getElementById('s-total').value='';
+  document.getElementById('s-formula').textContent='';
+  document.getElementById('s-price-tier').textContent='';
+  renderCart();
+}
+function removeFromCart(idx){cart.splice(idx,1);renderCart();}
+function renderCart(){
+  const wrap=document.getElementById('cart-wrap');
+  if(!wrap)return;
+  if(!cart.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:1.5rem;font-size:13px">ยังไม่มีรายการในบิล — เลือกสินค้าด้านบนแล้วกด "เพิ่มรายการนี้ลงบิล"</div>';
+    document.getElementById('cart-total').textContent=fmt(0);
+    return;
+  }
+  wrap.innerHTML=cart.map((it,idx)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+    <div><div style="font-weight:500;font-size:14px">${it.product_name}</div><div style="font-size:12px;color:var(--text2)">${it.qty} ${it.unit||''} × ฿${it.price} = <b style="color:var(--green)">${fmt(it.total)}</b></div></div>
+    <button class="btn btn-sm btn-danger" onclick="removeFromCart(${idx})"><i class="ti ti-trash"></i></button>
+  </div>`).join('');
+  document.getElementById('cart-total').textContent=fmt(cart.reduce((a,it)=>a+it.total,0));
+}
+function resetSaleForm(){
   ['s-customer','s-product','s-qty','s-price','s-price-per','s-unit','s-total','s-note','s-cname','s-cphone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('s-unpaid').checked=false;
   document.getElementById('s-price-tier').textContent='';
-  renderSales();return data;
+  document.getElementById('s-formula').textContent='';
 }
-async function addSaleAndPrint(){const d=await addSale();if(d)showReceipt(d.id);}
+async function saveBill(){
+  if(!cart.length)return alert('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการลงบิลก่อนบันทึก');
+  const cid=document.getElementById('s-customer').value;
+  const c=cache.customers.find(x=>x.id==cid);
+  const priceType=c?.type||'ปกติ';
+  const billId=genId();
+  const channel=document.getElementById('s-channel').value;
+  const note=document.getElementById('s-note').value;
+  const cname=document.getElementById('s-cname').value.trim()||null;
+  const cphone=document.getElementById('s-cphone').value.trim()||null;
+  const paid=!document.getElementById('s-unpaid').checked;
+  setSync('saving','กำลังบันทึก...');
+  const rows=cart.map(it=>({
+    bill_id:billId,
+    product_id:it.product_id,product_name:it.product_name,qty:it.qty,unit:it.unit,
+    price:it.price,price_per:it.price_per,total:it.total,
+    channel,note,
+    customer_name:cname,customer_phone:cphone,
+    customer_id:cid?parseInt(cid):null,
+    price_type:priceType,paid,
+  }));
+  const {data,error}=await SB.from('sales').insert(rows).select();
+  if(error){setSync('err','บันทึกไม่สำเร็จ');return alert(error.message);}
+  for(const it of cart){
+    const p=cache.products.find(x=>x.id===it.product_id);
+    if(p)await SB.from('products').update({stock_qty:Math.max(0,(p.stock_qty||0)-it.qty)}).eq('id',p.id);
+  }
+  await loadAll();
+  cart=[];renderCart();
+  resetSaleForm();
+  renderSales();
+  return {billId,items:data};
+}
+async function saveBillAndPrint(){const r=await saveBill();if(r)showReceiptForBill(r.billId);}
 function confirmDel(fn,msg='ลบรายการนี้'){if(confirm(msg+'?'))fn();}
 async function delSale(id){await SB.from('sales').delete().eq('id',id);await loadAll();renderSales();}
 function editSale(id){
@@ -1224,7 +1288,13 @@ async function saveEditSale(){
   }).eq('id',id);
   await loadAll();closeModal('modal-edit-sale');
   const from=document.getElementById('es-id').dataset.from;
-  if(from==='bills')renderBills();else renderSales();
+  if(from==='bills'){
+    renderBills();
+    const billId=document.getElementById('eb-id').value;
+    if(billId&&!document.getElementById('modal-editbill').classList.contains('hidden')){
+      renderBillItemsInModal(cache.sales.filter(s=>(s.bill_id||s.id)==billId));
+    }
+  }else renderSales();
 }
 
 // ===== CUSTOMERS =====
@@ -1381,54 +1451,144 @@ function calcCustRowTotal(cid,pid){
   }
 }
 
-// ===== BILLS =====
+// ===== BILLS (จัดกลุ่มหลายรายการต่อบิลด้วย bill_id) =====
+function groupBills(salesList){
+  const map=new Map();
+  salesList.forEach(s=>{
+    const bid=s.bill_id||s.id; // ข้อมูลเก่าที่ไม่มี bill_id ให้ถือเป็นบิลของตัวเอง
+    if(!map.has(bid))map.set(bid,[]);
+    map.get(bid).push(s);
+  });
+  return Array.from(map.entries()).map(([bid,items])=>{
+    items.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const first=items[0];
+    return {
+      bill_id:bid,
+      items,
+      created_at:first.created_at,
+      customer_name:first.customer_name,
+      customer_phone:first.customer_phone,
+      channel:first.channel,
+      paid:items.every(i=>i.paid!==false),
+      total:items.reduce((a,i)=>a+(i.total||0),0),
+    };
+  }).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+}
 function renderBills(){
   const q=(document.getElementById('bill-search')?.value||'').toLowerCase();
   const fc=document.getElementById('bill-filter')?.value||'';
-  let b=cache.sales;
-  if(fc)b=b.filter(s=>s.channel===fc);
-  if(q)b=b.filter(s=>(s.customer_name||'').toLowerCase().includes(q)||(s.customer_phone||'').toLowerCase().includes(q)||(s.product_name||'').toLowerCase().includes(q)||String(s.id).includes(q));
-  document.getElementById('b-count').textContent=b.length;
-  document.getElementById('b-named').textContent=b.filter(s=>s.customer_name).length;
-  document.getElementById('b-total').textContent=fmt(b.reduce((a,s)=>a+(s.total||0),0));
-  document.getElementById('bills-list').innerHTML=b.length?b.map(s=>`<tr>
-    <td style="font-size:13px;color:var(--text2);font-weight:600">#${String(s.id).padStart(4,'0')}</td>
-    <td style="font-size:12px;color:var(--text2)">${fmtDate(s.created_at)}</td>
-    <td>${s.customer_name?`<span style="font-weight:500">${s.customer_name}</span>`:'<span style="color:var(--text3)">-</span>'}</td>
-    <td style="font-size:13px">${s.customer_phone||'<span style="color:var(--text3)">-</span>'}</td>
-    <td>${s.product_name}</td>
-    <td style="font-weight:600;color:var(--green)">${fmt(s.total)}</td>
-    <td><span class="badge b-coral">${s.channel}</span></td>
-    <td><span class="badge" style="cursor:pointer;background:${s.paid===false?'var(--red-l)':'var(--green-l)'};color:${s.paid===false?'#A32D2D':'#0F6E56'}" onclick="togglePaid(${s.id},${s.paid===false})" title="แตะเพื่อสลับสถานะ">${s.paid===false?'ค้างจ่าย':'จ่ายแล้ว'}</span></td>
-    <td style="display:flex;gap:4px">
-      <button class="btn btn-sm" onclick="showReceipt(${s.id})" title="ปริ้นใบเสร็จ"><i class="ti ti-printer"></i></button>
-      <button class="btn btn-sm" onclick="editSale(${s.id})" title="แก้ไขทุกอย่าง"><i class="ti ti-edit"></i></button>
-      <button class="btn btn-sm btn-danger" onclick="confirmDel(()=>delSale(${s.id}),'ลบบิลนี้')"><i class="ti ti-trash"></i></button>
-    </td></tr>`).join(''):emptyRow(9);
+  let bills=groupBills(cache.sales);
+  if(fc)bills=bills.filter(b=>b.channel===fc);
+  if(q)bills=bills.filter(b=>(b.customer_name||'').toLowerCase().includes(q)||(b.customer_phone||'').toLowerCase().includes(q)||b.items.some(i=>(i.product_name||'').toLowerCase().includes(q))||String(b.bill_id).includes(q));
+  document.getElementById('b-count').textContent=bills.length;
+  document.getElementById('b-named').textContent=bills.filter(b=>b.customer_name).length;
+  document.getElementById('b-total').textContent=fmt(bills.reduce((a,b)=>a+b.total,0));
+  document.getElementById('bills-list').innerHTML=bills.length?bills.map(b=>{
+    const productSummary=b.items.length>1
+      ?`${b.items[0].product_name} <span style="color:var(--text3);font-size:12px">+${b.items.length-1} รายการ</span>`
+      :b.items[0].product_name;
+    return `<tr>
+      <td style="font-size:13px;color:var(--text2);font-weight:600">#${String(b.bill_id).slice(-6)}</td>
+      <td style="font-size:12px;color:var(--text2)">${fmtDate(b.created_at)}</td>
+      <td>${b.customer_name?`<span style="font-weight:500">${b.customer_name}</span>`:'<span style="color:var(--text3)">-</span>'}</td>
+      <td style="font-size:13px">${b.customer_phone||'<span style="color:var(--text3)">-</span>'}</td>
+      <td>${productSummary}</td>
+      <td style="font-weight:600;color:var(--green)">${fmt(b.total)}</td>
+      <td><span class="badge b-coral">${b.channel}</span></td>
+      <td><span class="badge" style="cursor:pointer;background:${!b.paid?'var(--red-l)':'var(--green-l)'};color:${!b.paid?'#A32D2D':'#0F6E56'}" onclick="toggleBillPaid('${b.bill_id}',${!b.paid})" title="แตะเพื่อสลับสถานะ">${!b.paid?'ค้างจ่าย':'จ่ายแล้ว'}</span></td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="showReceiptForBill('${b.bill_id}')" title="ปริ้นใบเสร็จ"><i class="ti ti-printer"></i></button>
+        <button class="btn btn-sm" onclick="viewBillDetail('${b.bill_id}')" title="ดู/แก้ไขรายการในบิล"><i class="ti ti-list-details"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="confirmDel(()=>delBill('${b.bill_id}'),'ลบบิลนี้ทั้งหมด')"><i class="ti ti-trash"></i></button>
+      </td></tr>`;
+  }).join(''):emptyRow(9);
 }
-async function togglePaid(id,isCurrentlyUnpaid){
-  await SB.from('sales').update({paid:!!isCurrentlyUnpaid}).eq('id',id);
+async function toggleBillPaid(billId,newPaid){
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  setSync('saving','กำลังบันทึก...');
+  for(const it of items){await SB.from('sales').update({paid:newPaid}).eq('id',it.id);}
   await loadAll();renderBills();
 }
-function editBill(id){
-  const s=cache.sales.find(x=>x.id===id);if(!s)return;
-  document.getElementById('eb-id').value=id;
-  document.getElementById('eb-bill-no').textContent='#'+String(id).padStart(4,'0')+' — '+s.product_name+' '+fmt(s.total);
-  document.getElementById('eb-cname').value=s.customer_name||'';
-  document.getElementById('eb-cphone').value=s.customer_phone||'';
-  document.getElementById('eb-channel').value=s.channel||'หน้าร้าน';
-  document.getElementById('eb-note').value=s.note||'';
+async function delBill(billId){
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  setSync('saving','กำลังลบ...');
+  for(const it of items){await SB.from('sales').delete().eq('id',it.id);}
+  await loadAll();renderBills();
+}
+function renderBillItemsInModal(items){
+  document.getElementById('eb-items').innerHTML=items.length?items.map(it=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+    <div>${it.product_name} — ${it.qty} ${it.unit||''} × ฿${it.price} = <b style="color:var(--green)">${fmt(it.total)}</b></div>
+    <div style="display:flex;gap:4px">
+      <button class="btn btn-sm" onclick="editSale(${it.id})" title="แก้ไข"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm btn-danger" onclick="removeItemFromBill(${it.id},'${it.bill_id||it.id}')" title="ลบ"><i class="ti ti-trash"></i></button>
+    </div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;text-align:center;padding:8px">ไม่มีรายการ</div>';
+  document.getElementById('eb-add-product').innerHTML='<option value="">-- เลือกสินค้าเพิ่ม --</option>'+cache.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+}
+function onEbAddProductChange(){
+  const p=cache.products.find(x=>x.id==document.getElementById('eb-add-product').value);
+  document.getElementById('eb-add-price').value=p?p.price:'';
+}
+async function removeItemFromBill(saleId,billId){
+  if(!confirm('ลบรายการนี้ออกจากบิล?'))return;
+  setSync('saving','กำลังลบ...');
+  await SB.from('sales').delete().eq('id',saleId);
+  await loadAll();
+  const remaining=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  if(remaining.length){renderBillItemsInModal(remaining);renderBills();}
+  else{closeModal('modal-editbill');renderBills();}
+}
+async function addItemToBill(){
+  const billId=document.getElementById('eb-id').value;
+  const pid=parseInt(document.getElementById('eb-add-product').value);
+  const p=cache.products.find(x=>x.id===pid);
+  if(!p)return alert('กรุณาเลือกสินค้า');
+  const qty=parseFloat(document.getElementById('eb-add-qty').value);
+  if(!qty||qty<=0)return alert('กรุณาระบุจำนวน');
+  const price=parseFloat(document.getElementById('eb-add-price').value)||p.price;
+  const total=Math.round(price*qty);
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  const first=items[0];
+  setSync('saving','กำลังบันทึก...');
+  await SB.from('sales').insert({
+    bill_id:billId,
+    product_id:p.id,product_name:p.name,qty,unit:p.unit,price,price_per:p.price_per||1,total,
+    channel:first?first.channel:'หน้าร้าน',
+    customer_name:first?first.customer_name:null,
+    customer_phone:first?first.customer_phone:null,
+    customer_id:first?first.customer_id:null,
+    price_type:first?first.price_type:'ปกติ',
+    paid:first?first.paid!==false:true,
+  });
+  await SB.from('products').update({stock_qty:Math.max(0,(p.stock_qty||0)-qty)}).eq('id',p.id);
+  await loadAll();
+  renderBillItemsInModal(cache.sales.filter(s=>(s.bill_id||s.id)==billId));
+  document.getElementById('eb-add-qty').value='';document.getElementById('eb-add-price').value='';document.getElementById('eb-add-product').value='';
+  renderBills();
+}
+function viewBillDetail(billId){
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  if(!items.length)return;
+  const first=items[0];
+  document.getElementById('eb-id').value=billId;
+  document.getElementById('eb-bill-no').textContent='#'+String(billId).slice(-6)+' — '+items.length+' รายการ — รวม '+fmt(items.reduce((a,i)=>a+(i.total||0),0));
+  document.getElementById('eb-cname').value=first.customer_name||'';
+  document.getElementById('eb-cphone').value=first.customer_phone||'';
+  document.getElementById('eb-channel').value=first.channel||'หน้าร้าน';
+  document.getElementById('eb-note').value=first.note||'';
+  renderBillItemsInModal(items);
   openModal('modal-editbill');
 }
 async function saveEditBill(){
-  const id=document.getElementById('eb-id').value;
-  setSync('saving','กำลังบันทึก...');
-  await SB.from('sales').update({
+  const billId=document.getElementById('eb-id').value;
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  const upd={
     customer_name:document.getElementById('eb-cname').value.trim()||null,
     customer_phone:document.getElementById('eb-cphone').value.trim()||null,
     channel:document.getElementById('eb-channel').value,
     note:document.getElementById('eb-note').value.trim()||null,
-  }).eq('id',id);
+  };
+  setSync('saving','กำลังบันทึก...');
+  for(const it of items){await SB.from('sales').update(upd).eq('id',it.id);}
   await loadAll();closeModal('modal-editbill');renderBills();
 }
 
@@ -1738,19 +1898,29 @@ function fmtPriceUnit(price, per, unit){
 }
 function showReceipt(saleId){
   const s=cache.sales.find(x=>x.id===saleId);if(!s)return;
+  showReceiptForBill(s.bill_id||s.id);
+}
+function showReceiptForBill(billId){
+  const items=cache.sales.filter(s=>(s.bill_id||s.id)==billId);
+  if(!items.length)return;
+  const first=items[0];
   document.getElementById('r-shopname').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
   document.getElementById('r-footer-name').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
   document.getElementById('r-phone').textContent=cfg.phone?'โทร: '+cfg.phone:'';
-  document.getElementById('r-date').textContent=fmtDate(s.created_at);
+  document.getElementById('r-date').textContent=fmtDate(first.created_at);
   const cr=document.getElementById('r-cname-row'),cpr=document.getElementById('r-cphone-row');
-  if(s.customer_name){document.getElementById('r-cname').textContent=s.customer_name;cr.style.display='flex';}else cr.style.display='none';
-  if(s.customer_phone){document.getElementById('r-cphone').textContent=s.customer_phone;cpr.style.display='flex';}else cpr.style.display='none';
-  const priceLabel=fmtPriceUnit(s.price, s.price_per||1, s.unit);
-  document.getElementById('r-items').innerHTML=`<div class="r-row"><span>${s.product_name}</span></div><div class="r-row" style="padding-left:12px;color:#555"><span>${priceLabel} × ${s.qty}</span><span>${fmt(s.total)}</span></div>`;
-  document.getElementById('r-total').textContent=fmt(s.total);
-  document.getElementById('r-note').textContent=s.note?'หมายเหตุ: '+s.note:'';
-  document.getElementById('receipt-paper').dataset.currentTotal=s.total;
-  const owed=s.customer_id?cache.sales.filter(s2=>s2.customer_id===s.customer_id&&s2.id!==s.id&&s2.paid===false).reduce((a,s2)=>a+(s2.total||0),0):0;
+  if(first.customer_name){document.getElementById('r-cname').textContent=first.customer_name;cr.style.display='flex';}else cr.style.display='none';
+  if(first.customer_phone){document.getElementById('r-cphone').textContent=first.customer_phone;cpr.style.display='flex';}else cpr.style.display='none';
+  document.getElementById('r-items').innerHTML=items.map(s=>{
+    const priceLabel=fmtPriceUnit(s.price,s.price_per||1,s.unit);
+    return `<div class="r-row"><span>${s.product_name}</span></div><div class="r-row" style="padding-left:12px;color:#555"><span>${priceLabel} × ${s.qty}</span><span>${fmt(s.total)}</span></div>`;
+  }).join('');
+  const grandTotal=items.reduce((a,s)=>a+(s.total||0),0);
+  document.getElementById('r-total').textContent=fmt(grandTotal);
+  const notes=items.map(s=>s.note).filter(Boolean);
+  document.getElementById('r-note').textContent=notes.length?'หมายเหตุ: '+notes.join(', '):'';
+  document.getElementById('receipt-paper').dataset.currentTotal=grandTotal;
+  const owed=first.customer_id?cache.sales.filter(s2=>s2.customer_id===first.customer_id&&(s2.bill_id||s2.id)!=billId&&s2.paid===false).reduce((a,s2)=>a+(s2.total||0),0):0;
   document.getElementById('r-owed').value=owed;
   document.getElementById('r-ship').value=0;
   updateReceiptNet();
