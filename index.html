@@ -66,6 +66,10 @@ body{font-family:'Segoe UI',Sarabun,sans-serif;background:var(--bg);color:var(--
 .btn-red:hover{background:#fad5d5}
 .btn-danger{color:var(--red);border-color:var(--red)}
 .btn-danger:hover{background:var(--red-l)}
+/* BACKUP BUTTONS */
+.backup-btn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;border:1.5px solid var(--border);border-radius:14px;background:var(--bg2);cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;color:var(--text)}
+.backup-btn:hover{border-color:var(--coral);background:var(--coral-l)}
+.backup-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 /* CARDS */
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.5rem}
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1.1rem}
@@ -227,6 +231,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
     <div class="nav-item" onclick="go('attendance')"><i class="ti ti-calendar-stats"></i> รายงานเข้างาน</div>
     <div class="nav-item" onclick="go('employees')"><i class="ti ti-users"></i> จัดการพนักงาน</div>
     <div class="nav-sec">ระบบ</div>
+    <div class="nav-item" onclick="go('backup')"><i class="ti ti-database-export"></i> สำรองข้อมูล</div>
     <div class="nav-item" onclick="go('settings')"><i class="ti ti-settings"></i> ตั้งค่า</div>
     <div class="sync-wrap">
       <div class="sync-badge s-ok" id="sync-badge"><i class="ti ti-cloud-check" style="font-size:15px"></i><span id="sync-text">เชื่อมต่อแล้ว</span></div>
@@ -486,6 +491,40 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
       </div>
     </div>
 
+    <!-- BACKUP -->
+    <div id="page-backup" class="hidden">
+      <div class="topbar"><div><h2>สำรองข้อมูล</h2><div class="sub">สำรอง / กู้คืน / ส่งออกข้อมูลร้านเป็นไฟล์</div></div></div>
+      <div class="content">
+        <div class="metric-grid" id="backup-stats"></div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:1rem">ส่งออกข้อมูล</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px">
+            <button class="backup-btn" onclick="exportBackupJSON()">
+              <span class="backup-icon" style="background:var(--blue-l);color:var(--blue)"><i class="ti ti-file-database"></i></span>
+              สำรองข้อมูลทั้งหมด (.json)
+            </button>
+            <button class="backup-btn" onclick="exportSalesCSV()">
+              <span class="backup-icon" style="background:var(--green-l);color:var(--green)"><i class="ti ti-file-spreadsheet"></i></span>
+              ส่งออกบิล/การขายเป็น CSV
+            </button>
+            <button class="backup-btn" onclick="exportFinanceCSV()">
+              <span class="backup-icon" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-file-spreadsheet"></i></span>
+              ส่งออกรายรับ-รายจ่ายเป็น CSV
+            </button>
+          </div>
+          <p style="font-size:12px;color:var(--text3);margin-top:14px">ไฟล์ .json ใช้สำหรับสำรอง/กู้คืนข้อมูลทั้งระบบ (สินค้า, บิล, ลูกค้า, พนักงาน, เข้างาน ฯลฯ) — ไฟล์ .csv เปิดดูหรือแก้ไขต่อได้ทันทีด้วย Excel หรือ Google Sheets</p>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:1rem">กู้คืนข้อมูลจากไฟล์สำรอง</div>
+          <div class="alert alert-warn">
+            <i class="ti ti-alert-triangle"></i> การกู้คืนจะเพิ่ม/อัปเดตข้อมูลจากไฟล์ .json เข้าสู่ระบบปัจจุบัน โดย<b>ไม่ลบ</b>ข้อมูลเดิมที่มีอยู่
+          </div>
+          <input type="file" id="backup-restore-input" accept="application/json" style="display:none" onchange="handleRestoreFile(event)">
+          <button class="btn" onclick="document.getElementById('backup-restore-input').click()"><i class="ti ti-upload"></i> เลือกไฟล์สำรอง (.json)</button>
+        </div>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div id="page-settings" class="hidden">
       <div class="topbar"><h2>ตั้งค่าระบบ</h2></div>
@@ -540,6 +579,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
     <button class="drawer-item" id="dn-stock" onclick="go('stock');closeDrawer()"><i class="ti ti-box"></i>สต๊อค</button>
     <button class="drawer-item" id="dn-attendance" onclick="go('attendance');closeDrawer()"><i class="ti ti-calendar-stats"></i>เข้างาน</button>
     <button class="drawer-item" id="dn-employees" onclick="go('employees');closeDrawer()"><i class="ti ti-users"></i>พนักงาน</button>
+    <button class="drawer-item" id="dn-backup" onclick="go('backup');closeDrawer()"><i class="ti ti-database-export"></i>สำรองข้อมูล</button>
     <button class="drawer-item" id="dn-settings" onclick="go('settings');closeDrawer()"><i class="ti ti-settings"></i>ตั้งค่า</button>
     <button class="drawer-item" onclick="doLogout();closeDrawer()" style="color:var(--red)"><i class="ti ti-logout" style="color:var(--red)"></i>ออก</button>
   </div>
@@ -1039,7 +1079,7 @@ async function bootApp(){
 
 // ===== ROUTING =====
 const MAIN_PAGES=['dashboard','sales','checkin'];
-const DRAWER_PAGES=['customers','bills','income','expense','report','products','stock','attendance','employees','settings'];
+const DRAWER_PAGES=['customers','bills','income','expense','report','products','stock','attendance','employees','backup','settings'];
 function go(page){
   document.querySelectorAll('[id^="page-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('page-'+page).classList.remove('hidden');
@@ -1052,7 +1092,7 @@ function go(page){
   // drawer active
   document.querySelectorAll('.drawer-item').forEach(el=>el.classList.remove('active'));
   const dn=document.getElementById('dn-'+page);if(dn)dn.classList.add('active');
-  const fn={dashboard:renderDashboard,sales:renderSales,customers:renderCustomers,bills:renderBills,income:renderIncome,expense:renderExpense,report:renderReport,products:renderProducts,stock:renderStock,checkin:renderCheckin,attendance:renderAttendance,employees:renderEmployees,settings:renderSettings};
+  const fn={dashboard:renderDashboard,sales:renderSales,customers:renderCustomers,bills:renderBills,income:renderIncome,expense:renderExpense,report:renderReport,products:renderProducts,stock:renderStock,checkin:renderCheckin,attendance:renderAttendance,employees:renderEmployees,backup:renderBackup,settings:renderSettings};
   if(fn[page])fn[page]();
 }
 function openDrawer(){
@@ -1959,6 +1999,109 @@ async function saveReceiptImage(){
     a.href=url;a.download='receipt-'+Date.now()+'.png';document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),4000);
   },'image/png');
+}
+
+// ===== BACKUP / EXPORT / RESTORE =====
+function renderBackup(){
+  const wrap=document.getElementById('backup-stats');
+  if(!wrap)return;
+  const bills=new Set(cache.sales.map(s=>s.bill_id||s.id)).size;
+  wrap.innerHTML=`
+    <div class="metric-card"><div class="metric-label">บิลทั้งหมด</div><div class="metric-val">${bills.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">รายจ่าย</div><div class="metric-val">${cache.expenses.length.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">ลูกค้าประจำ</div><div class="metric-val">${cache.customers.length.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">สินค้า</div><div class="metric-val">${cache.products.length.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">พนักงาน</div><div class="metric-val">${cache.employees.length.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">ประวัติสต๊อค</div><div class="metric-val">${cache.stockHistory.length.toLocaleString()}</div></div>`;
+}
+function downloadFile(filename,content,mime='text/plain'){
+  const blob=new Blob([content],{type:mime+';charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+function toCSV(headers,rows){
+  const esc=v=>{
+    if(v===null||v===undefined)return '';
+    const s=String(v).replace(/"/g,'""');
+    return /[",\n]/.test(s)?`"${s}"`:s;
+  };
+  const lines=[headers.map(esc).join(',')];
+  rows.forEach(r=>lines.push(r.map(esc).join(',')));
+  return '\uFEFF'+lines.join('\r\n'); // ใส่ BOM ให้ Excel เปิดภาษาไทยได้ถูกต้อง
+}
+function exportBackupJSON(){
+  const backup={
+    exported_at:new Date().toISOString(),
+    shop:cfg,
+    products:cache.products,
+    sales:cache.sales,
+    expenses:cache.expenses,
+    stock_history:cache.stockHistory,
+    employees:cache.employees,
+    attendance:cache.attendance,
+    customers:cache.customers,
+    customer_prices:cache.customerPrices,
+  };
+  const dateStr=new Date().toISOString().split('T')[0];
+  const shopSlug=(cfg.shopName||'shop').replace(/\s+/g,'_');
+  downloadFile(`backup-${shopSlug}-${dateStr}.json`,JSON.stringify(backup,null,2),'application/json');
+}
+function exportSalesCSV(){
+  const headers=['เลขที่บิล','วันที่/เวลา','ลูกค้า','เบอร์โทร','สินค้า','จำนวน','หน่วย','ราคา','ยอดรวม','ช่องทาง','สถานะ','หมายเหตุ'];
+  const rows=cache.sales.slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(s=>[
+    '#'+String(s.bill_id||s.id).slice(-6),
+    fmtDate(s.created_at),
+    s.customer_name||'',
+    s.customer_phone||'',
+    s.product_name,
+    s.qty,
+    s.unit||'',
+    s.price,
+    s.total,
+    s.channel,
+    s.paid===false?'ค้างจ่าย':'จ่ายแล้ว',
+    s.note||''
+  ]);
+  downloadFile(`sales-${new Date().toISOString().split('T')[0]}.csv`,toCSV(headers,rows),'text/csv');
+}
+function exportFinanceCSV(){
+  const items=[
+    ...cache.sales.map(s=>({date:s.created_at,type:'รายรับ',name:s.product_name,cat:s.channel,amount:s.total,note:s.note||''})),
+    ...cache.expenses.map(e=>({date:e.created_at,type:'รายจ่าย',name:e.name,cat:e.cat,amount:-Math.abs(e.amount||0),note:e.note||''})),
+  ].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const headers=['วันที่/เวลา','ประเภท','รายการ','หมวดหมู่/ช่องทาง','จำนวนเงิน','หมายเหตุ'];
+  const rows=items.map(it=>[fmtDate(it.date),it.type,it.name,it.cat,it.amount,it.note]);
+  downloadFile(`finance-${new Date().toISOString().split('T')[0]}.csv`,toCSV(headers,rows),'text/csv');
+}
+function handleRestoreFile(ev){
+  const file=ev.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    let data;
+    try{data=JSON.parse(e.target.result);}
+    catch(err){alert('ไฟล์ไม่ถูกต้อง ไม่สามารถอ่านเป็น JSON ได้');ev.target.value='';return;}
+    if(!confirm('การกู้คืนจะเพิ่ม/อัปเดตข้อมูลจากไฟล์สำรองเข้าสู่ระบบปัจจุบัน (ไม่ลบข้อมูลเดิม) ต้องการดำเนินการต่อหรือไม่?')){ev.target.value='';return;}
+    setSync('saving','กำลังกู้คืนข้อมูล...');
+    try{
+      const collections={products:'products',sales:'sales',expenses:'expenses',stock_history:'stock_history',employees:'employees',attendance:'attendance',customers:'customers',customer_prices:'customer_prices'};
+      for(const key in collections){
+        const arr=data[key];
+        if(Array.isArray(arr)&&arr.length){
+          await SB.from(collections[key]).insert(arr);
+        }
+      }
+      if(data.shop){cfg={...cfg,...data.shop};document.getElementById('shop-name-display').textContent=cfg.shopName;}
+      await loadAll();
+      setSync('ok','กู้คืนข้อมูลสำเร็จ');
+      alert('กู้คืนข้อมูลสำเร็จ ✓');
+      renderBackup();
+    }catch(err){setSync('err','กู้คืนไม่สำเร็จ');alert('เกิดข้อผิดพลาดระหว่างกู้คืน: '+err.message);}
+    finally{ev.target.value='';}
+  };
+  reader.readAsText(file,'UTF-8');
 }
 
 // ===== SETTINGS =====
