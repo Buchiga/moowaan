@@ -780,7 +780,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
         <div style="font-size:12px;color:#666" id="r-phone"></div>
       </div>
       <hr class="r-divider">
-      <div class="r-row"><span class="r-row-label">วันที่:</span><span id="r-date"></span></div>
+      <div class="r-row"><span class="r-row-label">วันที่:</span><input type="date" id="r-date-input" style="width:150px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit;font-size:15px"></div>
       <div class="r-row" id="r-cname-row" style="display:none"><span class="r-row-label">ลูกค้า:</span><span id="r-cname"></span></div>
       <div class="r-row" id="r-cphone-row" style="display:none"><span class="r-row-label">เบอร์:</span><span id="r-cphone"></span></div>
       <hr class="r-divider">
@@ -788,13 +788,9 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
       <div id="r-items"></div>
       <hr class="r-divider">
       <div class="r-total-row"><span>รวมทั้งสิ้น</span><span id="r-total"></span></div>
-      <div class="r-row" style="margin-top:6px"><span class="r-row-label">ยอดค้าง:</span><input type="number" id="r-owed" value="0" oninput="updateReceiptNet()" style="width:100px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit"></div>
-      <div class="r-row"><span class="r-row-label">ค่าขนส่ง:</span><input type="number" id="r-ship" value="0" oninput="updateReceiptNet()" style="width:100px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit"></div>
-      <hr class="r-divider">
-      <div class="r-total-row" style="font-weight:700"><span>ยอดสุทธิ</span><span id="r-net" style="text-decoration:underline"></span></div>
+      <div class="r-row" style="margin-top:6px"><span class="r-row-label">ยอดค้าง:</span><input type="number" id="r-owed" value="0" style="width:100px;text-align:right;border:1px solid #ccc;border-radius:6px;padding:2px 6px;font-family:inherit"></div>
       <hr class="r-divider">
       <div id="r-note" style="font-size:12px;color:#666"></div>
-      <div class="r-footer"><div>🍖 ขอบคุณที่ใช้บริการ 🍖</div><div id="r-footer-name"></div></div>
     </div>
     <div class="receipt-actions">
       <button class="btn" style="flex:1;justify-content:center" onclick="closeModal('modal-receipt')"><i class="ti ti-x"></i> ปิด</button>
@@ -1936,6 +1932,17 @@ function fmtPriceUnit(price, per, unit){
   if(p===1||p===0) return `฿${price}/${u}`;
   return `฿${price}/${p}${u}`;
 }
+function fmtDateOnly(d){return new Date(d).toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'});}
+function toISODateInput(d){
+  const dt=new Date(d);
+  const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),day=String(dt.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function fmtDateOnlyFromISO(iso){
+  if(!iso)return '';
+  const [y,m,day]=iso.split('-').map(Number);
+  return new Date(y,m-1,day).toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
 function showReceipt(saleId){
   const s=cache.sales.find(x=>x.id===saleId);if(!s)return;
   showReceiptForBill(s.bill_id||s.id);
@@ -1945,9 +1952,8 @@ function showReceiptForBill(billId){
   if(!items.length)return;
   const first=items[0];
   document.getElementById('r-shopname').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
-  document.getElementById('r-footer-name').textContent=cfg.shopName||'อิสราภรณ์หมูหวาน';
   document.getElementById('r-phone').textContent=cfg.phone?'โทร: '+cfg.phone:'';
-  document.getElementById('r-date').textContent=fmtDate(first.created_at);
+  document.getElementById('r-date-input').value=toISODateInput(first.created_at);
   const cr=document.getElementById('r-cname-row'),cpr=document.getElementById('r-cphone-row');
   if(first.customer_name){document.getElementById('r-cname').textContent=first.customer_name;cr.style.display='flex';}else cr.style.display='none';
   if(first.customer_phone){document.getElementById('r-cphone').textContent=first.customer_phone;cpr.style.display='flex';}else cpr.style.display='none';
@@ -1959,39 +1965,31 @@ function showReceiptForBill(billId){
   document.getElementById('r-total').textContent=fmt(grandTotal);
   const notes=items.map(s=>s.note).filter(Boolean);
   document.getElementById('r-note').textContent=notes.length?'หมายเหตุ: '+notes.join(', '):'';
-  document.getElementById('receipt-paper').dataset.currentTotal=grandTotal;
   const owed=first.customer_id?cache.sales.filter(s2=>s2.customer_id===first.customer_id&&(s2.bill_id||s2.id)!=billId&&s2.paid===false).reduce((a,s2)=>a+(s2.total||0),0):0;
   document.getElementById('r-owed').value=owed;
-  document.getElementById('r-ship').value=0;
-  updateReceiptNet();
   openModal('modal-receipt');
-}
-function updateReceiptNet(){
-  const total=parseFloat(document.getElementById('receipt-paper').dataset.currentTotal)||0;
-  const owed=parseFloat(document.getElementById('r-owed').value)||0;
-  const ship=parseFloat(document.getElementById('r-ship').value)||0;
-  document.getElementById('r-net').textContent=fmt(total+owed+ship);
 }
 function printReceipt(){
   const owed=parseFloat(document.getElementById('r-owed').value)||0;
-  const ship=parseFloat(document.getElementById('r-ship').value)||0;
+  const dateVal=document.getElementById('r-date-input').value;
+  const dateDisplay=fmtDateOnlyFromISO(dateVal);
   const pa=document.getElementById('print-area');
   let html=document.getElementById('receipt-paper').innerHTML;
+  html=html.replace(/<input[^>]*id="r-date-input"[^>]*>/,`<span>${dateDisplay}</span>`);
   html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${fmt(owed)}</span>`);
-  html=html.replace(/<input[^>]*id="r-ship"[^>]*>/,`<span>${fmt(ship)}</span>`);
   pa.innerHTML=`<div id="receipt-paper" style="width:80mm;margin:0 auto;font-family:'Courier New',monospace;font-size:12px;padding:8mm">${html}</div>`;
   pa.style.display='block';window.print();setTimeout(()=>{pa.style.display='none';},500);
 }
 async function saveReceiptImage(){
   if(typeof html2canvas==='undefined'){alert('โหลดระบบสร้างรูปภาพไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');return;}
-  const owedInput=document.getElementById('r-owed'),shipInput=document.getElementById('r-ship');
+  const owedInput=document.getElementById('r-owed'),dateInput=document.getElementById('r-date-input');
   const owedSpan=document.createElement('span');owedSpan.textContent=fmt(parseFloat(owedInput.value)||0);
-  const shipSpan=document.createElement('span');shipSpan.textContent=fmt(parseFloat(shipInput.value)||0);
-  owedInput.replaceWith(owedSpan);shipInput.replaceWith(shipSpan);
+  const dateSpan=document.createElement('span');dateSpan.textContent=fmtDateOnlyFromISO(dateInput.value);
+  owedInput.replaceWith(owedSpan);dateInput.replaceWith(dateSpan);
   const node=document.getElementById('receipt-paper');
   let canvas;
   try{canvas=await html2canvas(node,{backgroundColor:'#ffffff',scale:2});}
-  finally{owedSpan.replaceWith(owedInput);shipSpan.replaceWith(shipInput);}
+  finally{owedSpan.replaceWith(owedInput);dateSpan.replaceWith(dateInput);}
   canvas.toBlob((blob)=>{
     if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
     const url=URL.createObjectURL(blob);
