@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -136,7 +137,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 .r-divider{border:none;border-top:1px dashed #ccc;margin:10px 0}
 .r-row{display:flex;justify-content:space-between}
 .r-row-label{color:#555}
-.r-total-row{display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px}
+.r-total-row{display:flex;justify-content:space-between;align-items:baseline;font-size:28px;font-weight:800;margin-top:8px}
 .r-footer{text-align:center;color:#888;font-size:12px;margin-top:10px}
 /* LOADING */
 .loading-screen{position:fixed;inset:0;background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:999}
@@ -362,9 +363,12 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">รายการบิลทั้งหมด</span>
-            <select id="bill-filter" style="font-size:13px;padding:6px 10px;width:auto" onchange="renderBills()">
-              <option value="">ทุกช่องทาง</option><option>หน้าร้าน</option><option>ออนไลน์</option><option>ตลาด</option><option>อื่นๆ</option>
-            </select>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="bill-filter" style="font-size:13px;padding:6px 10px;width:auto" onchange="renderBills()">
+                <option value="">ทุกช่องทาง</option><option>หน้าร้าน</option><option>ออนไลน์</option><option>ตลาด</option><option>อื่นๆ</option>
+              </select>
+              <button class="btn btn-sm btn-green" onclick="exportBillsExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+            </div>
           </div>
           <div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>วันที่/เวลา</th><th>ลูกค้า</th><th>เบอร์</th><th>สินค้า</th><th>ยอด</th><th>ช่องทาง</th><th>สถานะ</th><th></th></tr></thead>
           <tbody id="bills-list"><tr class="empty-row"><td colspan="9">ยังไม่มีรายการ</td></tr></tbody></table></div>
@@ -508,12 +512,29 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
               <span class="backup-icon" style="background:var(--green-l);color:var(--green)"><i class="ti ti-file-spreadsheet"></i></span>
               ส่งออกบิล/การขายเป็น CSV
             </button>
+            <button class="backup-btn" onclick="exportBillsExcel()">
+              <span class="backup-icon" style="background:var(--green-l);color:var(--green)"><i class="ti ti-file-spreadsheet"></i></span>
+              ส่งออกบิลเป็น Excel (.xlsx)
+            </button>
             <button class="backup-btn" onclick="exportFinanceCSV()">
               <span class="backup-icon" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-file-spreadsheet"></i></span>
               ส่งออกรายรับ-รายจ่ายเป็น CSV
             </button>
           </div>
-          <p style="font-size:12px;color:var(--text3);margin-top:14px">ไฟล์ .json ใช้สำหรับสำรอง/กู้คืนข้อมูลทั้งระบบ (สินค้า, บิล, ลูกค้า, พนักงาน, เข้างาน ฯลฯ) — ไฟล์ .csv เปิดดูหรือแก้ไขต่อได้ทันทีด้วย Excel หรือ Google Sheets</p>
+                    <p style="font-size:12px;color:var(--text3);margin-top:14px">ไฟล์ .json ใช้สำหรับสำรอง/กู้คืนข้อมูลทั้งระบบ (สินค้า, บิล, ลูกค้า, พนักงาน, เข้างาน ฯลฯ) — ไฟล์ .csv/.xlsx เปิดดูหรือแก้ไขต่อได้ทันทีด้วย Excel หรือ Google Sheets</p>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:1rem">สรุปยอดรายเดือน (บันทึกเป็นรูปภาพ)</div>
+          <div class="form-row" style="align-items:end">
+            <div class="form-group" style="margin-bottom:0">
+              <label>เลือกเดือน</label>
+              <input type="month" id="sum-month">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="previewMonthlySummary()"><i class="ti ti-chart-bar"></i> สร้างสรุป</button>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--text3);margin-top:6px">สรุปยอดรายรับ-รายจ่าย-กำไร พร้อมกราฟยอดขายรายวันและสินค้าขายดีของเดือนที่เลือก ดูตัวอย่างก่อนแล้วค่อยบันทึกเป็นรูปภาพเก็บไว้ได้</p>
         </div>
         <div class="card">
           <div class="card-title" style="margin-bottom:1rem">กู้คืนข้อมูลจากไฟล์สำรอง</div>
@@ -800,6 +821,21 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
     </div>
   </div>
 </div>
+
+<!-- MONTHLY SUMMARY -->
+<div id="modal-summary" class="overlay hidden">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">สรุปยอดรายเดือน</div>
+    <div style="max-height:65vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
+      <div id="summary-paper" style="background:#fff;padding:1.5rem"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-summary')">ปิด</button>
+      <button class="btn btn-primary" onclick="saveSummaryImage()"><i class="ti ti-photo"></i> บันทึกรูปภาพ</button>
+    </div>
+  </div>
+</div>
+
 <div id="print-area" style="display:none"></div>
 
 <script>
@@ -1980,17 +2016,20 @@ function printReceipt(){
   html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${fmt(owed)}</span>`);
   const PAPER_W_MM=76,PAPER_H_MM=130,PAD_MM=3;
   const contentW=PAPER_W_MM-PAD_MM*2;
-  pa.innerHTML=`<div id="receipt-print-outer" style="width:${PAPER_W_MM}mm;height:${PAPER_H_MM}mm;overflow:hidden">
-    <div id="receipt-print-scale" style="transform-origin:top left">
-      <div id="receipt-paper" style="width:${contentW}mm;font-family:'Courier New',monospace;font-size:15px;line-height:1.65;background:#fff;padding:${PAD_MM}mm;box-sizing:border-box">${html}</div>
+  pa.innerHTML=`<div id="receipt-print-outer" style="width:${PAPER_W_MM}mm;height:${PAPER_H_MM}mm;overflow:hidden;display:flex;align-items:center">
+    <div id="receipt-print-scale" style="transform-origin:top left;width:100%">
+      <div id="receipt-paper" style="width:${contentW}mm;font-family:'Courier New',monospace;font-size:15px;line-height:1.65;background:#fff;padding:${PAD_MM}mm;box-sizing:border-box;margin:0 auto">${html}</div>
     </div>
   </div>`;
   pa.style.display='block';
   const scaleWrap=document.getElementById('receipt-print-scale');
   const naturalHeightPx=scaleWrap.offsetHeight;
   const availableHeightPx=PAPER_H_MM*(96/25.4);
-  if(naturalHeightPx>availableHeightPx){
-    scaleWrap.style.transform=`scale(${availableHeightPx/naturalHeightPx})`;
+  // สเกลให้เต็มความสูงของฉลากเสมอ (ทั้งย่อและขยาย) จะได้ไม่ต้องลากปรับเอง
+  if(naturalHeightPx>0){
+    const scale=availableHeightPx/naturalHeightPx;
+    scaleWrap.style.transform=`scale(${scale})`;
+    scaleWrap.style.transformOrigin='top center';
   }
   const originalTitle=document.title;
   document.title='';
@@ -2008,22 +2047,29 @@ async function saveReceiptImage(){
   html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${owedText}</span>`);
 
   // ขนาดฉลากที่ตั้งไว้ในแอป Flash label คือ 76x130mm — เรนเดอร์รูปให้สัดส่วนตรงกันเป๊ะ
+  // สร้างรูปที่มีขนาดคงที่ 76x130mm เต็มแผ่นเสมอ โดยจัดเนื้อหาไว้กึ่งกลางแนวตั้ง
+  // เพื่อให้เวลานำไปพิมพ์จากแอปรูปภาพ ไม่ต้องครอป/ลากปรับขนาดเอง
   const LABEL_W_MM=76, LABEL_H_MM=130, PAD_MM=3, PX_PER_MM=8; // 8px/mm ≈ 203dpi (มาตรฐานเครื่องพิมพ์ฉลากความร้อน)
-  const wrap=document.createElement('div');
-  wrap.style.position='fixed';wrap.style.left='-9999px';wrap.style.top='0';
-  wrap.style.width=(LABEL_W_MM*PX_PER_MM)+'px';
-  wrap.style.minHeight=(LABEL_H_MM*PX_PER_MM)+'px';
-  wrap.style.background='#fff';
-  wrap.style.boxSizing='border-box';
-  wrap.style.padding=(PAD_MM*PX_PER_MM)+'px';
-  wrap.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:30px;line-height:1.65">${html}</div>`;
-  document.body.appendChild(wrap);
+  const labelWpx=LABEL_W_MM*PX_PER_MM, labelHpx=LABEL_H_MM*PX_PER_MM;
+  const outer=document.createElement('div');
+  outer.style.position='fixed';outer.style.left='-9999px';outer.style.top='0';
+  outer.style.width=labelWpx+'px';
+  outer.style.height=labelHpx+'px';
+  outer.style.background='#fff';
+  outer.style.boxSizing='border-box';
+  outer.style.display='flex';
+  outer.style.flexDirection='column';
+  outer.style.justifyContent='flex-start';
+  outer.style.overflow='hidden';
+  outer.style.padding=(PAD_MM*PX_PER_MM)+'px';
+  outer.innerHTML=`<div id="receipt-image-content" style="font-family:'Courier New',monospace;font-size:30px;line-height:1.65">${html}</div>`;
+  document.body.appendChild(outer);
 
   let canvas;
   try{
-    canvas=await html2canvas(wrap,{backgroundColor:'#ffffff',scale:1,width:LABEL_W_MM*PX_PER_MM,windowWidth:LABEL_W_MM*PX_PER_MM});
+    canvas=await html2canvas(outer,{backgroundColor:'#ffffff',scale:1,width:labelWpx,height:labelHpx,windowWidth:labelWpx});
   }finally{
-    document.body.removeChild(wrap);
+    document.body.removeChild(outer);
   }
   canvas.toBlob((blob)=>{
     if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
@@ -2046,6 +2092,102 @@ function renderBackup(){
     <div class="metric-card"><div class="metric-label">สินค้า</div><div class="metric-val">${cache.products.length.toLocaleString()}</div></div>
     <div class="metric-card"><div class="metric-label">พนักงาน</div><div class="metric-val">${cache.employees.length.toLocaleString()}</div></div>
     <div class="metric-card"><div class="metric-label">ประวัติสต๊อค</div><div class="metric-val">${cache.stockHistory.length.toLocaleString()}</div></div>`;
+  initSummaryMonth();
+}
+
+// ===== สรุปยอดรายเดือน (บันทึกเป็นรูปภาพ) =====
+function initSummaryMonth(){
+  const el=document.getElementById('sum-month');
+  if(el&&!el.value){
+    const now=new Date();
+    el.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  }
+}
+function buildBarChartSVG(data,opts={}){
+  const w=opts.width||600,h=opts.height||190,barColor=opts.color||'#D85A30';
+  const max=Math.max(...data.map(d=>d.value),1);
+  const n=data.length||1;
+  const barW=(w-40)/n*0.7, gap=(w-40)/n*0.3;
+  let bars='',labels='';
+  data.forEach((d,i)=>{
+    const bh=Math.round((d.value/max)*(h-46));
+    const x=20+i*(barW+gap);
+    const y=h-28-bh;
+    bars+=`<rect x="${x.toFixed(1)}" y="${y}" width="${barW.toFixed(1)}" height="${bh}" rx="3" fill="${barColor}"></rect>`;
+    if(d.label)labels+=`<text x="${(x+barW/2).toFixed(1)}" y="${h-10}" font-size="10" text-anchor="middle" fill="#666">${d.label}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">${bars}${labels}</svg>`;
+}
+function previewMonthlySummary(){
+  initSummaryMonth();
+  const monthVal=document.getElementById('sum-month').value;
+  if(!monthVal)return alert('กรุณาเลือกเดือน');
+  const [y,m]=monthVal.split('-').map(Number);
+  const monthSales=cache.sales.filter(s=>{const d=new Date(s.created_at);return d.getFullYear()===y&&d.getMonth()+1===m;});
+  const monthExpenses=cache.expenses.filter(e=>{const d=new Date(e.created_at);return d.getFullYear()===y&&d.getMonth()+1===m;});
+  const income=monthSales.reduce((a,s)=>a+(s.total||0),0);
+  const expense=monthExpenses.reduce((a,e)=>a+(e.amount||0),0);
+  const profit=income-expense;
+  const billCount=new Set(monthSales.map(s=>s.bill_id||s.id)).size;
+  const monthLabel=new Date(y,m-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+
+  const daysInMonth=new Date(y,m,0).getDate();
+  const dailyMap={};
+  for(let d=1;d<=daysInMonth;d++)dailyMap[d]=0;
+  monthSales.forEach(s=>{const d=new Date(s.created_at).getDate();dailyMap[d]=(dailyMap[d]||0)+(s.total||0);});
+  const dailyData=Object.entries(dailyMap).map(([d,v],i)=>({label:(Number(d)===1||Number(d)%5===0||Number(d)===daysInMonth)?d:'',value:v}));
+
+  const byP={};
+  monthSales.forEach(s=>{byP[s.product_name]=(byP[s.product_name]||0)+(s.total||0);});
+  const prodData=Object.entries(byP).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>({label:n.length>6?n.slice(0,6)+'…':n,value:v}));
+
+  const dailyChart=buildBarChartSVG(dailyData,{width:600,height:180,color:'#D85A30'});
+  const prodChart=prodData.length?buildBarChartSVG(prodData,{width:600,height:200,color:'#0F6E56'}):'<p style="color:#999;font-size:13px;text-align:center">ยังไม่มีข้อมูลการขายเดือนนี้</p>';
+
+  document.getElementById('summary-paper').innerHTML=`
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:20px;font-weight:700">${cfg.shopName||'อิสราภรณ์หมูหวาน'}</div>
+      <div style="font-size:14px;color:#666">สรุปยอดประจำเดือน ${monthLabel}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem">
+      <div style="background:#EAF3DE;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:12px;color:#0F6E56">รายรับรวม</div>
+        <div style="font-size:17px;font-weight:700;color:#0F6E56">${fmt(income)}</div>
+      </div>
+      <div style="background:#FCEBEB;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:12px;color:#8B1E1E">รายจ่ายรวม</div>
+        <div style="font-size:17px;font-weight:700;color:#8B1E1E">${fmt(expense)}</div>
+      </div>
+      <div style="background:#FAECE7;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:12px;color:#7A2A0E">กำไรสุทธิ</div>
+        <div style="font-size:17px;font-weight:700;color:#7A2A0E">${fmt(profit)}</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:#666;margin-bottom:1rem;text-align:center">จำนวนบิลทั้งหมด: <b>${billCount}</b> บิล</div>
+    <div style="margin-bottom:1.25rem">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">ยอดขายรายวัน</div>
+      ${dailyChart}
+    </div>
+    <div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">สินค้าขายดี (Top 6)</div>
+      ${prodChart}
+    </div>
+    <div style="text-align:center;margin-top:1.25rem;font-size:11px;color:#999">สร้างเมื่อ ${new Date().toLocaleString('th-TH')}</div>
+  `;
+  openModal('modal-summary');
+}
+async function saveSummaryImage(){
+  if(typeof html2canvas==='undefined'){alert('โหลดระบบสร้างรูปภาพไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');return;}
+  const node=document.getElementById('summary-paper');
+  const canvas=await html2canvas(node,{backgroundColor:'#ffffff',scale:2});
+  const monthVal=document.getElementById('sum-month').value||'summary';
+  canvas.toBlob((blob)=>{
+    if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`summary-${monthVal}.png`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  },'image/png');
 }
 function downloadFile(filename,content,mime='text/plain'){
   const blob=new Blob([content],{type:mime+';charset=utf-8;'});
@@ -2107,6 +2249,59 @@ function exportFinanceCSV(){
   const headers=['วันที่/เวลา','ประเภท','รายการ','หมวดหมู่/ช่องทาง','จำนวนเงิน','หมายเหตุ'];
   const rows=items.map(it=>[fmtDate(it.date),it.type,it.name,it.cat,it.amount,it.note]);
   downloadFile(`finance-${new Date().toISOString().split('T')[0]}.csv`,toCSV(headers,rows),'text/csv');
+}
+// ส่งออกรายการบิลทั้งหมด (จัดกลุ่มแล้ว) เป็นไฟล์ Excel (.xlsx) จริง โดยใช้ SheetJS
+function exportBillsExcel(){
+  if(typeof XLSX==='undefined'){alert('โหลดระบบสร้างไฟล์ Excel ไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');return;}
+  const bills=groupBills(cache.sales);
+  if(!bills.length){alert('ยังไม่มีรายการบิล');return;}
+
+  // ชีตที่ 1: สรุปทีละบิล (1 แถว = 1 บิล)
+  const summaryHeader=['เลขที่บิล','วันที่/เวลา','ลูกค้า','เบอร์โทร','จำนวนรายการ','รายการสินค้า','ยอดรวม (บาท)','ช่องทาง','สถานะ'];
+  const summaryRows=bills.map(b=>[
+    '#'+String(b.bill_id).slice(-6),
+    fmtDate(b.created_at),
+    b.customer_name||'',
+    b.customer_phone||'',
+    b.items.length,
+    b.items.map(i=>`${i.product_name} x${i.qty}${i.unit||''}`).join(', '),
+    b.total,
+    b.channel,
+    b.paid?'จ่ายแล้ว':'ค้างจ่าย',
+  ]);
+
+  // ชีตที่ 2: รายการสินค้าทุกชิ้นแยกบรรทัด (ละเอียดต่อบิล)
+  const detailHeader=['เลขที่บิล','วันที่/เวลา','ลูกค้า','เบอร์โทร','สินค้า','จำนวน','หน่วย','ราคา/หน่วย','ยอดรวมรายการ (บาท)','ช่องทาง','สถานะ','หมายเหตุ'];
+  const detailRows=[];
+  bills.forEach(b=>{
+    b.items.forEach(it=>{
+      detailRows.push([
+        '#'+String(b.bill_id).slice(-6),
+        fmtDate(it.created_at),
+        b.customer_name||'',
+        b.customer_phone||'',
+        it.product_name,
+        it.qty,
+        it.unit||'',
+        it.price,
+        it.total,
+        it.channel,
+        it.paid===false?'ค้างจ่าย':'จ่ายแล้ว',
+        it.note||'',
+      ]);
+    });
+  });
+
+  const wb=XLSX.utils.book_new();
+  const wsSummary=XLSX.utils.aoa_to_sheet([summaryHeader,...summaryRows]);
+  const wsDetail=XLSX.utils.aoa_to_sheet([detailHeader,...detailRows]);
+  // ปรับความกว้างคอลัมน์คร่าวๆ ให้อ่านง่าย
+  wsSummary['!cols']=[{wch:10},{wch:16},{wch:16},{wch:14},{wch:10},{wch:40},{wch:14},{wch:10},{wch:10}];
+  wsDetail['!cols']=[{wch:10},{wch:16},{wch:16},{wch:14},{wch:18},{wch:8},{wch:8},{wch:10},{wch:16},{wch:10},{wch:10},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,wsSummary,'สรุปบิล');
+  XLSX.utils.book_append_sheet(wb,wsDetail,'รายละเอียดสินค้า');
+  const dateStr=new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb,`bills-${dateStr}.xlsx`);
 }
 function handleRestoreFile(ev){
   const file=ev.target.files[0];
