@@ -2019,23 +2019,25 @@ function printReceipt(){
   let html=document.getElementById('receipt-paper').innerHTML;
   html=html.replace(/<input[^>]*id="r-date-input"[^>]*>/,`<span>${dateDisplay}</span>`);
   html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${fmt(owed)}</span>`);
-  const PAPER_W_MM=76,PAPER_H_MM=130,PAD_MM=3;
+  const PAPER_W_MM=76,PAD_MM=3;
   const contentW=PAPER_W_MM-PAD_MM*2;
-  pa.innerHTML=`<div id="receipt-print-outer" style="width:${PAPER_W_MM}mm;height:${PAPER_H_MM}mm;overflow:hidden;display:flex;align-items:center">
-    <div id="receipt-print-scale" style="transform-origin:top left;width:100%">
-      <div id="receipt-paper" style="width:${contentW}mm;font-family:'Courier New',monospace;font-size:15px;line-height:1.65;background:#fff;padding:${PAD_MM}mm;box-sizing:border-box;margin:0 auto">${html}</div>
-    </div>
+  // ไม่จำกัดความสูง — ให้ฟอนต์ขนาดเดิมเสมอ (เท่ากันทุกบิล) ความยาวจะยืด/หดตามเนื้อหาจริง
+  pa.innerHTML=`<div id="receipt-print-outer" style="width:${PAPER_W_MM}mm">
+    <div id="receipt-paper" style="width:${contentW}mm;font-family:'Courier New',monospace;font-size:15px;line-height:1.65;background:#fff;padding:${PAD_MM}mm;box-sizing:border-box;margin:0 auto;overflow-wrap:break-word;word-break:break-word">${html}</div>
   </div>`;
   pa.style.display='block';
-  const scaleWrap=document.getElementById('receipt-print-scale');
-  const naturalHeightPx=scaleWrap.offsetHeight;
-  const availableHeightPx=PAPER_H_MM*(96/25.4);
-  // สเกลให้เต็มความสูงของฉลากเสมอ (ทั้งย่อและขยาย) จะได้ไม่ต้องลากปรับเอง
-  if(naturalHeightPx>0){
-    const scale=availableHeightPx/naturalHeightPx;
-    scaleWrap.style.transform=`scale(${scale})`;
-    scaleWrap.style.transformOrigin='top center';
+  // วัดความสูงเนื้อหาจริง แล้วตั้งขนาดหน้ากระดาษให้พอดีเป๊ะ — จะได้ไม่มีที่ว่างเหลือ ไม่ต้องลากขยายเอง
+  const outer=document.getElementById('receipt-print-outer');
+  const PX_PER_MM=96/25.4;
+  const contentHeightPx=outer.scrollHeight;
+  const heightMM=Math.ceil(contentHeightPx/PX_PER_MM)+2; // +2mm กันขอบตกหล่นจากการปัดเศษ
+  let pageStyleTag=document.getElementById('dynamic-page-size');
+  if(!pageStyleTag){
+    pageStyleTag=document.createElement('style');
+    pageStyleTag.id='dynamic-page-size';
+    document.head.appendChild(pageStyleTag);
   }
+  pageStyleTag.textContent=`@page{size:${PAPER_W_MM}mm ${heightMM}mm;margin:0}`;
   const originalTitle=document.title;
   document.title='';
   window.print();
