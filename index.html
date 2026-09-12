@@ -175,7 +175,7 @@ input[readonly]{background:var(--bg3);color:var(--text2)}
 .drawer-overlay{position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.3);display:none}
 .drawer-overlay.open{display:block}
 @media(max-width:680px){.bottom-nav{display:block}}
-@page{size:73mm 130mm;margin:0}
+@page{size:76mm 130mm;margin:0}
 @media print{body>*:not(#print-area){display:none!important}#print-area{display:block!important;position:fixed;inset:0;background:#fff;padding:0;margin:0}.receipt-actions{display:none!important}}
 </style>
 </head>
@@ -1978,7 +1978,7 @@ function printReceipt(){
   let html=document.getElementById('receipt-paper').innerHTML;
   html=html.replace(/<input[^>]*id="r-date-input"[^>]*>/,`<span>${dateDisplay}</span>`);
   html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${fmt(owed)}</span>`);
-  const PAPER_W_MM=73,PAPER_H_MM=130,PAD_MM=3;
+  const PAPER_W_MM=76,PAPER_H_MM=130,PAD_MM=3;
   const contentW=PAPER_W_MM-PAD_MM*2;
   pa.innerHTML=`<div id="receipt-print-outer" style="width:${PAPER_W_MM}mm;height:${PAPER_H_MM}mm;overflow:hidden">
     <div id="receipt-print-scale" style="transform-origin:top left">
@@ -2001,13 +2001,30 @@ function printReceipt(){
 async function saveReceiptImage(){
   if(typeof html2canvas==='undefined'){alert('โหลดระบบสร้างรูปภาพไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');return;}
   const owedInput=document.getElementById('r-owed'),dateInput=document.getElementById('r-date-input');
-  const owedSpan=document.createElement('span');owedSpan.textContent=fmt(parseFloat(owedInput.value)||0);
-  const dateSpan=document.createElement('span');dateSpan.textContent=fmtDateOnlyFromISO(dateInput.value);
-  owedInput.replaceWith(owedSpan);dateInput.replaceWith(dateSpan);
-  const node=document.getElementById('receipt-paper');
+  const owedText=fmt(parseFloat(owedInput.value)||0);
+  const dateText=fmtDateOnlyFromISO(dateInput.value);
+  let html=document.getElementById('receipt-paper').innerHTML;
+  html=html.replace(/<input[^>]*id="r-date-input"[^>]*>/,`<span>${dateText}</span>`);
+  html=html.replace(/<input[^>]*id="r-owed"[^>]*>/,`<span>${owedText}</span>`);
+
+  // ขนาดฉลากที่ตั้งไว้ในแอป Flash label คือ 76x130mm — เรนเดอร์รูปให้สัดส่วนตรงกันเป๊ะ
+  const LABEL_W_MM=76, LABEL_H_MM=130, PAD_MM=3, PX_PER_MM=8; // 8px/mm ≈ 203dpi (มาตรฐานเครื่องพิมพ์ฉลากความร้อน)
+  const wrap=document.createElement('div');
+  wrap.style.position='fixed';wrap.style.left='-9999px';wrap.style.top='0';
+  wrap.style.width=(LABEL_W_MM*PX_PER_MM)+'px';
+  wrap.style.minHeight=(LABEL_H_MM*PX_PER_MM)+'px';
+  wrap.style.background='#fff';
+  wrap.style.boxSizing='border-box';
+  wrap.style.padding=(PAD_MM*PX_PER_MM)+'px';
+  wrap.innerHTML=`<div style="font-family:'Courier New',monospace;font-size:30px;line-height:1.65">${html}</div>`;
+  document.body.appendChild(wrap);
+
   let canvas;
-  try{canvas=await html2canvas(node,{backgroundColor:'#ffffff',scale:2});}
-  finally{owedSpan.replaceWith(owedInput);dateSpan.replaceWith(dateInput);}
+  try{
+    canvas=await html2canvas(wrap,{backgroundColor:'#ffffff',scale:1,width:LABEL_W_MM*PX_PER_MM,windowWidth:LABEL_W_MM*PX_PER_MM});
+  }finally{
+    document.body.removeChild(wrap);
+  }
   canvas.toBlob((blob)=>{
     if(!blob)return alert('สร้างรูปภาพไม่สำเร็จ');
     const url=URL.createObjectURL(blob);
